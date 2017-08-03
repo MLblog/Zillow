@@ -1,0 +1,7 @@
+# Do not check in any data
+*.csv
+*.xslx
+*.xls
+
+# Jupyter notebook files
+*.ipynb_checkpoints
