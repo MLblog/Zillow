@@ -2,6 +2,7 @@
 *.csv
 *.xslx
 *.xls
+*.xlsx
 
 # Jupyter notebook files
 *.ipynb_checkpoints
