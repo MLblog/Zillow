@@ -103,6 +103,12 @@ class XGBoostPredictor(Predictor):
         self.labels["Year"] = self.labels["transactiondate"].dt.year
         self.labels = self.labels.drop_unchecked("transactiondate")
 
+    def split(self):
+        merged = self.labels.merge(self.features, how='left', on='parcelid')
+        train = merged[merged["Month"] < 10]
+        train = train.query('logerror > -0.4 and logerror < 0.4')
+        test = merged[merged["Month"] >= 10]
+        return (train, test)
 
     def train(self):
         """
