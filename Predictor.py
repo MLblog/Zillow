@@ -54,14 +54,6 @@ class Predictor(object):
         return (train, test)
 
     @abstractmethod
-    def preprocess(self):
-        """
-        A function that, given the raw dataset creates a feature vector.
-        Feature Engineering, cleaning and imputation goes here
-        """
-        return
-
-    @abstractmethod
     def train(self):
         """
         A function that trains the predictor on the given dataset.
@@ -73,7 +65,6 @@ class Predictor(object):
         Predicts the label for the given input
         :return: The predicted labels
         """
-
 
     def evaluate(self, metric='mae'):
         _, test = self.split()
