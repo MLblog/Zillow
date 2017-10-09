@@ -1,22 +1,8 @@
-from sklearn.preprocessing import LabelEncoder
 from abc import abstractmethod, ABCMeta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
-import pandas as pd
 import numpy as np
-import xgboost as xgb
-
-def drop_unchecked(df, cols):
-    """
-    An unchecked version of pandas.DataFrame.drop(cols, axis=1). This will not raise
-    an error in case of non existing column. Be careful though as this might hide spelling errors
-    """
-    for col in (set(cols) & set(df.columns)):
-        df = df.drop([col], axis=1)
-    return df
-
-# Enable OOP usage: df.drop_unchecked(cols) instead of drop_unchecked(df, cols)
-pd.DataFrame.drop_unchecked = drop_unchecked
+import pandas as pd
 
 """
 An abstract class modeling our notion of a predictor.
@@ -26,7 +12,7 @@ interface
 class Predictor(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, features, labels, params=None):
+    def __init__(self, features, labels, params={}):
         """
         Base constructor
 
@@ -54,14 +40,6 @@ class Predictor(object):
         return (train, test)
 
     @abstractmethod
-    def preprocess(self):
-        """
-        A function that, given the raw dataset creates a feature vector.
-        Feature Engineering, cleaning and imputation goes here
-        """
-        return
-
-    @abstractmethod
     def train(self):
         """
         A function that trains the predictor on the given dataset.
@@ -74,97 +52,45 @@ class Predictor(object):
         :return: The predicted labels
         """
 
-
     def evaluate(self, metric='mae'):
         _, test = self.split()
         y_val = test['logerror'].values
-        x_val = test.drop_unchecked("logerror")
         prediction = self.predict()
         if metric == 'mae':
             return mean_absolute_error(y_val, prediction)
         raise NotImplementedError("Only mean absolute error metric is currently supported.")
 
-
-class XGBoostPredictor(Predictor):
-
-    def preprocess(self):
+class BasePredictor(Predictor):
+    """
+    A dummy predictor, always outputing the median. Used for benchmarking models.
+    """
+    def train(self, params=None):
         """
-        A function that, given the raw dataset creates a feature vector.
-        Feature Engineering, cleaning and imputation goes here
+        A dummy predictor does not require training. We only need the median
         """
-
-        for c in self.features.columns:
-            # Replace NaNs
-            self.features[c] = self.features[c].fillna(-1)
-            if self.features[c].dtype == 'object':
-                # Encode categorical features
-                lbl = LabelEncoder()
-                lbl.fit(list(self.features[c].values))
-                self.features[c] = lbl.transform(list(self.features[c].values))
-
-        # Drop some useless or extremely rare features
-        bad_cols = ['propertyzoningdesc', 'propertycountylandusecode', 'fireplacecnt', 'fireplaceflag']
-        self.features = drop_unchecked(self.features, bad_cols)
-
-        # Create additional features. Month will be used to split into training and validation
-        self.labels["transactiondate"] = pd.to_datetime(self.labels["transactiondate"])
-        self.labels["Month"] = self.labels["transactiondate"].dt.month
-        self.labels["Year"] = self.labels["transactiondate"].dt.year
-        self.labels = self.labels.drop_unchecked("transactiondate")
-
-
-    def train(self):
-        """
-        A function that trains the predictor on the given dataset.
-        :return:
-        """
-        self.preprocess()
         train, _ = self.split()
         y_train = train['logerror'].values
-        x_train = train.drop_unchecked(['logerror','transactiondate'])
-
-        dtrain = xgb.DMatrix(x_train, y_train)
-        self.params['base_metric'] = np.median(y_train)
-        self.model = xgb.train(dict(self.params, silent=1), dtrain, num_boost_round=self.params['num_boost_rounds'])
+        self.params['median'] = np.median(y_train)
 
     def predict(self):
-        if not self.model:
-            raise ValueError("The predictor has not been trained yet")
-
         _, test = self.split()
-        x_val = test.drop_unchecked(['logerror', 'transactiondate'])
-        dtest = xgb.DMatrix(x_val)
-        return self.model.predict(dtest)
+        return [self.params['median']] * len(test)
 
 
 if __name__ == "__main__":
 
-    # Test that the classifier works
+    print("Reading training data...")
     features = pd.read_csv('data/train_features.csv')
     labels = pd.read_csv('data/train_label.csv')
 
-    ##### RUN XGBOOST
-    print("\nSetting up data for XGBoost ...")
-    # xgboost params
-    xgb_params = {
-        'eta': 0.037,
-        'max_depth': 5,
-        'subsample': 0.80,
-        'objective': 'reg:linear',
-        'eval_metric': 'mae',
-        'lambda': 0.8,
-        'alpha': 0.4,
-        'silent': 1,
-        'num_boost_rounds': 500
-    }
+    print("\nSetting up data for Base Predictor ...")
+    model = BasePredictor(features, labels)
 
-
-    # Train the model. Expect your machine to overheat here.
-    print("\nTraining XGBoost ...")
-    model = XGBoostPredictor(features, labels, xgb_params)
+    # Train the model using the best set of parameters found by the gridsearch
+    print("\nTraining Base Predictor ...")
     model.train()
 
-    print("\n Evaluating model...")
+    print("\nEvaluating model...")
     mae = model.evaluate()
 
     print("\n##########")
