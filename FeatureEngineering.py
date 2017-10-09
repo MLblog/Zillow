@@ -1,53 +1,47 @@
 import numpy as np
 import pandas as pd
-#from fancyimpute import BiScaler, KNN, NuclearNormMinimization, SoftImpute
 
 
-def dropCol(df,H):
+def drop_columns(df, threshold):
     """
     Drop the coluns with more than H % of missing values. Based on Manos algorithm.
     """
     nan_count = df.isnull().mean()
-    nan_count=nan_count[nan_count<=H]
-    df=df[nan_count.index.tolist()]
+    nan_count = nan_count[nan_count <= threshold]
+    df = df[nan_count.index.tolist()]
     return df
 
 
-
-def ColumnConvertion(df, H, categories=[]):
+def dummy_conversion(df, threshold, categories=[]):
     """
     Transform the columns with strings to features only if the 
     """
-    
-    listNames=[]
+    list_names=[]
     for c in df.columns:
-        if ((df[c].dtype == 'object') | (c in categories)):
+        if (df[c].dtype == 'object') | (c in categories):
             if c in categories:
-                df[c]=df[c].astype('category')
-                n=len(df[c].cat.categories)
+                df[c] = df[c].astype('category')
+                n = len(df[c].cat.categories)
             else:
-                n=len(set(df[c]))
+                n = len(set(df[c]))
                 
-            if n<=H:
-                listNames.append(c)
+            if n <= threshold:
+                list_names.append(c)
             else:
+                print("Dropping variable " + str(c))
                 del df[c]
+
     print('The features that will be transformed are:')
-    print(listNames)      
-    df=pd.get_dummies(df,columns=listNames)
+    print(list_names)
+    df = pd.get_dummies(df, columns=list_names)
     return df
 
 
+if __name__ == '__main__':
+    features = pd.read_csv('data/train_features.csv')
+    categories=['airconditioningtypeid','architecturalstyletypeid','buildingclasstypeid','decktypeid','fips',
+                'heatingorsystemtypeid','propertycountylandusecode','propertylandusetypeid','propertyzoningdesc',
+                'storytypeid','typeconstructiontypeid']
 
-
-
-categories=['airconditioningtypeid','architecturalstyletypeid','buildingclasstypeid','decktypeid','fips','heatingorsystemtypeid','propertycountylandusecode','propertylandusetypeid','propertyzoningdesc','storytypeid','typeconstructiontypeid']
-#features = pd.read_csv('data/train_features.csv')
-df=dropCol(features,0.8)
-df=ColumnConvertion(df,30,categories)
-#df=df.interpolate()
-
-
-
-#Some algorithms to impute missing values:
-    #https://pypi.python.org/pypi/fancyimpute
+    df = drop_col(features, 0.8)
+    df = dummy_conversion(df, 30, categories)
