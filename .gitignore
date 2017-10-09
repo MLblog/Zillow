@@ -6,3 +6,9 @@
 
 # Jupyter notebook files
 *.ipynb_checkpoints
+
+# Compiled python code
+__pycache__/
+
+# IDE config directory
+.idea/
