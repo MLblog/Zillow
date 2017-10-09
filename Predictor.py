@@ -1,6 +1,8 @@
 from abc import abstractmethod, ABCMeta
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
+import numpy as np
+import pandas as pd
 
 """
 An abstract class modeling our notion of a predictor.
@@ -10,7 +12,7 @@ interface
 class Predictor(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, features, labels, params=None):
+    def __init__(self, features, labels, params={}):
         """
         Base constructor
 
@@ -53,9 +55,44 @@ class Predictor(object):
     def evaluate(self, metric='mae'):
         _, test = self.split()
         y_val = test['logerror'].values
-        x_val = test.drop_unchecked("logerror")
         prediction = self.predict()
         if metric == 'mae':
             return mean_absolute_error(y_val, prediction)
         raise NotImplementedError("Only mean absolute error metric is currently supported.")
 
+class BasePredictor(Predictor):
+    """
+    A dummy predictor, always outputing the median. Used for benchmarking models.
+    """
+    def train(self, params=None):
+        """
+        A dummy predictor does not require training. We only need the median
+        """
+        train, _ = self.split()
+        y_train = train['logerror'].values
+        self.params['median'] = np.median(y_train)
+
+    def predict(self):
+        _, test = self.split()
+        return [self.params['median']] * len(test)
+
+
+if __name__ == "__main__":
+
+    print("Reading training data...")
+    features = pd.read_csv('data/train_features.csv')
+    labels = pd.read_csv('data/train_label.csv')
+
+    print("\nSetting up data for Base Predictor ...")
+    model = BasePredictor(features, labels)
+
+    # Train the model using the best set of parameters found by the gridsearch
+    print("\nTraining Base Predictor ...")
+    model.train()
+
+    print("\nEvaluating model...")
+    mae = model.evaluate()
+
+    print("\n##########")
+    print("Mean Absolute Error is: ", mae)
+    print("##########")
