@@ -24,6 +24,7 @@ class Predictor(object):
         self.labels = labels
         self.params = params
         self.model = None
+        print("Features shape: {} \nLabels shape: {}".format(features.shape, labels.shape))
 
     def set_params(self, params):
         """Override parameters set in the constructor. Dictionary expected"""
@@ -46,18 +47,22 @@ class Predictor(object):
         """
 
     @abstractmethod
-    def predict(self):
+    def predict(self, x_test):
         """
         Predicts the label for the given input
+        :param x_test: a pd.DataFrame of features to be used for predictions
         :return: The predicted labels
         """
 
     def evaluate(self, metric='mae'):
         _, test = self.split()
         y_val = test['logerror'].values
-        prediction = self.predict()
+        x_val = test.drop_unchecked(['logerror', 'transactiondate'])
+        prediction = self.predict(x_val)
+
         if metric == 'mae':
             return mean_absolute_error(y_val, prediction)
+
         raise NotImplementedError("Only mean absolute error metric is currently supported.")
 
 class BasePredictor(Predictor):

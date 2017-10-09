@@ -4,44 +4,37 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 from Predictor import Predictor
-
-def drop_unchecked(df, cols):
-    """
-    An unchecked version of pandas.DataFrame.drop(cols, axis=1). This will not raise
-    an error in case of non existing column. Be careful though, as this might hide spelling errors.
-    """
-    for col in (set(cols) & set(df.columns)):
-        df = df.drop([col], axis=1)
-    return df
+from FeatureEngineering import *
 
 # Enable OOP usage: df.drop_unchecked(cols) instead of drop_unchecked(df, cols)
 pd.DataFrame.drop_unchecked = drop_unchecked
 
+
 class XGBoostPredictor(Predictor):
+
+    def preprocess_test(self):
+        categories = ['airconditioningtypeid', 'architecturalstyletypeid', 'buildingclasstypeid', 'decktypeid', 'fips',
+                      'heatingorsystemtypeid', 'propertycountylandusecode', 'propertylandusetypeid',
+                      'propertyzoningdesc', 'storytypeid', 'typeconstructiontypeid', 'regionidcounty']
+
+        self.features = dummy_conversion(self.features, 30, categories)
+        self.features.fillna(-1, inplace=True)
+        self.labels = parse_date(self.labels)
 
     def preprocess(self):
         """
         A function that, given the raw dataset creates a feature vector.
         Feature Engineering, cleaning and imputation goes here
         """
-        for c in self.features.columns:
-            # Replace NaNs
-            self.features[c] = self.features[c].fillna(-1)
-            if self.features[c].dtype == 'object':
-                # Encode categorical features
-                lbl = LabelEncoder()
-                lbl.fit(list(self.features[c].values))
-                self.features[c] = lbl.transform(list(self.features[c].values))
+        self.features.fillna(-1, inplace=True)
+        self.features = label_encode(self.features)
 
         # Drop some useless or extremely rare features
         bad_cols = ['propertyzoningdesc', 'propertycountylandusecode', 'fireplacecnt', 'fireplaceflag']
         self.features = drop_unchecked(self.features, bad_cols)
 
-        # Create additional features. Month will be used to split into training and validation
-        self.labels["transactiondate"] = pd.to_datetime(self.labels["transactiondate"])
-        self.labels["Month"] = self.labels["transactiondate"].dt.month
-        self.labels["Year"] = self.labels["transactiondate"].dt.year
-        self.labels = self.labels.drop_unchecked("transactiondate")
+        # Create additional features.
+        self.labels = parse_date(self.labels)
 
     def tune(self, params, nfolds=3):
         """
@@ -54,16 +47,16 @@ class XGBoostPredictor(Predictor):
         y_train = train['logerror'].values
         x_train = train.drop_unchecked(['logerror','transactiondate'])
 
-        dtrain = xgb.DMatrix(x_train, y_train)
         self.params['base_score'] = np.median(y_train)
         model = xgb.XGBRegressor()
 
+        # Use parameter names found in XGBRegressor documentation rather than xgb.train
         grid = GridSearchCV(model, params, cv=nfolds)
         grid.fit(x_train, y_train)
         return grid.best_params_
 
 
-    def train(self, params=None):
+    def train(self, params=None, num_boost_rounds=242):
         """
         A function that trains the predictor on the given dataset. Optionally accepts a set of parameters
         """
@@ -78,15 +71,17 @@ class XGBoostPredictor(Predictor):
         x_train = train.drop_unchecked(['logerror','transactiondate'])
 
         self.params['base_score'] = np.median(y_train)
-        self.model = xgb.XGBRegressor(**params).fit(x_train, y_train)
 
-    def predict(self):
+        dtrain = xgb.DMatrix(x_train, y_train)
+        self.model = xgb.train(params, dtrain, num_boost_round=num_boost_rounds)
+
+
+    def predict(self, x_val):
         if not self.model:
             raise ValueError("The predictor has not been trained yet")
 
-        _, test = self.split()
-        x_val = test.drop_unchecked(['logerror', 'transactiondate'])
-        prediction = self.model.predict(x_val)
+        dtest = xgb.DMatrix(x_val)
+        prediction = self.model.predict(dtest)
         return prediction
 
 
@@ -107,6 +102,17 @@ if __name__ == "__main__":
         'silent': 1,
     }
 
+    xgb_params = {
+        'eta': 0.037,
+        'max_depth': 5,
+        'subsample': 0.80,
+        'objective': 'reg:linear',
+        'eval_metric': 'mae',
+        'lambda': 0.8,
+        'alpha': 0.4,
+        'silent': 1
+    }
+
     tuning_params = {
         'learning_rate': [0.037],
         'silent': [1],
@@ -115,14 +121,14 @@ if __name__ == "__main__":
         'reg_lambda': [0.8]
     }
 
-    model = XGBoostPredictor(features, labels, initial_params)
+    model = XGBoostPredictor(features, labels, xgb_params)
 
-    print("Tuning XGBoost...")
-    best_params = model.tune(tuning_params)
+    #print("Tuning XGBoost...")
+    #best_params = model.tune(tuning_params)
 
     # Train the model using the best set of parameters found by the gridsearch
     print("\nTraining XGBoost ...")
-    model.train(params=best_params)
+    model.train()
 
     print("\nEvaluating model...")
     mae = model.evaluate()
