@@ -12,6 +12,7 @@ def drop_unchecked(df, cols):
         df = df.drop([col], axis=1)
     return df
 
+
 def parse_date(df, date_col='transactiondate'):
     """
     Replaces the date time field by a month and year column
@@ -24,14 +25,16 @@ def parse_date(df, date_col='transactiondate'):
     df["Year"] = df["transactiondate"].dt.year
     return df.drop_unchecked("transactiondate")
 
+
 def drop_columns(df, threshold):
     """
-    Drop the coluns with more than H % of missing values. Based on Manos algorithm.
+    Drop the coluns with more than threshold % of missing values. Based on Manos algorithm.
     """
     nan_count = df.isnull().mean()
     nan_count = nan_count[nan_count <= threshold]
     df = df[nan_count.index.tolist()]
     return df
+
 
 def label_encode(df):
     for c in df.columns:
@@ -66,12 +69,11 @@ def dummy_conversion(df, threshold, categories=[]):
     df = pd.get_dummies(df, columns=list_names)
     return df
 
-
 if __name__ == '__main__':
     features = pd.read_csv('data/train_features.csv')
-    categories=['airconditioningtypeid','architecturalstyletypeid','buildingclasstypeid','decktypeid','fips',
+    categories = ['airconditioningtypeid','architecturalstyletypeid','buildingclasstypeid','decktypeid','fips',
                 'heatingorsystemtypeid','propertycountylandusecode','propertylandusetypeid','propertyzoningdesc',
                 'storytypeid','typeconstructiontypeid']
 
-    df = drop_col(features, 0.8)
+    df = drop_columns(features, 0.8)
     df = dummy_conversion(df, 30, categories)
