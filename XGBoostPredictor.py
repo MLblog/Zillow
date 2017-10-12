@@ -12,6 +12,11 @@ pd.DataFrame.drop_unchecked = drop_unchecked
 
 class XGBoostPredictor(Predictor):
 
+    def __init__(self, features, labels, params={}, name=None):
+        model = xgb.XGBRegressor()
+        super().__init__(features, labels, params, name='XGBoost')
+
+
     def preprocess_test(self):
         categories = ['airconditioningtypeid', 'architecturalstyletypeid', 'buildingclasstypeid', 'decktypeid', 'fips',
                       'heatingorsystemtypeid', 'propertycountylandusecode', 'propertylandusetypeid',
@@ -113,6 +118,9 @@ if __name__ == "__main__":
         'silent': 1
     }
 
+    model = XGBoostPredictor(features, labels, xgb_params)
+
+    print("Tuning XGBoost...")
     tuning_params = {
         'learning_rate': [0.037],
         'silent': [1],
@@ -120,18 +128,15 @@ if __name__ == "__main__":
         'subsample': [0.8],
         'reg_lambda': [0.8]
     }
-
-    model = XGBoostPredictor(features, labels, xgb_params)
-
-    #print("Tuning XGBoost...")
-    #best_params = model.tune(tuning_params)
+    optimal_params = model.tune(tuning_params)
 
     # Train the model using the best set of parameters found by the gridsearch
     print("\nTraining XGBoost ...")
-    model.train()
+    model.train(optimal_params)
 
     print("\nEvaluating model...")
     mae = model.evaluate()
+    model.persist_tuning(score=mae, params=optimal_params, write_to='tuning.txt')
 
     print("\n##########")
     print("Mean Absolute Error is: ", mae)

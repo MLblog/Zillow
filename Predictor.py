@@ -3,6 +3,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 import numpy as np
 import pandas as pd
+from FeatureEngineering import *
+from sklearn.model_selection import GridSearchCV
 
 """
 An abstract class modeling our notion of a predictor.
@@ -12,7 +14,7 @@ interface
 class Predictor(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, features, labels, params={}):
+    def __init__(self, features, labels, params={}, name=None):
         """
         Base constructor
 
@@ -23,8 +25,8 @@ class Predictor(object):
         self.features = features
         self.labels = labels
         self.params = params
+        self.name = name
         self.model = None
-        print("Features shape: {} \nLabels shape: {}".format(features.shape, labels.shape))
 
     def set_params(self, params):
         """Override parameters set in the constructor. Dictionary expected"""
@@ -54,10 +56,41 @@ class Predictor(object):
         :return: The predicted labels
         """
 
+    def persist_tuning(self, score, params, write_to):
+        """
+        Persists a set of parameters as well as their achieved score to a file.
+        :param params: Parameters used
+        :param score: Score achieved on the test set using params
+        :param write_to: If passed, the optimal parameters found will be written to a file
+        :return: Void
+        """
+        with open(write_to, "a") as f:
+            f.write("------------------------------------------------\n")
+            f.write("Model\t{}\n".format(self.name))
+            f.write("Best MAE\t{}\nparams: {}\n\n".format(score, params))
+
+
+    def tune(self, params, nfolds=3):
+        """
+        Exhaustively searches over the grid of parameters for the best combination
+        :param params: Grid of parameters to be explored
+        :param nfolds: Number of folds to be used by cross-validation.
+
+        :return: Dict of best parameters found.
+        """
+        self.preprocess()
+        train, _ = self.split()
+        y_train = train['logerror'].values
+        x_train = train.drop_unchecked(['logerror','transactiondate'])
+
+        grid = GridSearchCV(self.model, params, cv=nfolds)
+        grid.fit(x_train, y_train)
+        return grid.best_params_
+
     def evaluate(self, metric='mae'):
         _, test = self.split()
         y_val = test['logerror'].values
-        x_val = test.drop_unchecked(['logerror', 'transactiondate'])
+        x_val = drop_unchecked(test, ['logerror', 'transactiondate'])
         prediction = self.predict(x_val)
 
         if metric == 'mae':
@@ -69,6 +102,9 @@ class BasePredictor(Predictor):
     """
     A dummy predictor, always outputing the median. Used for benchmarking models.
     """
+    def __init__(self, features, labels, params={}, name=None):
+        super().__init__(features, labels, params, name='Naive')
+
     def train(self, params=None):
         """
         A dummy predictor does not require training. We only need the median
@@ -77,9 +113,8 @@ class BasePredictor(Predictor):
         y_train = train['logerror'].values
         self.params['median'] = np.median(y_train)
 
-    def predict(self):
-        _, test = self.split()
-        return [self.params['median']] * len(test)
+    def predict(self, x_val):
+        return [self.params['median']] * len(x_val)
 
 
 if __name__ == "__main__":

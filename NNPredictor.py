@@ -9,8 +9,11 @@ from FeatureEngineering import *
 # Enable OOP usage: df.drop_unchecked(cols) instead of drop_unchecked(df, cols)
 pd.DataFrame.drop_unchecked = drop_unchecked
 
-
 class NNPredictor(Predictor):
+
+    def __init__(self, features, labels, params={}, name=None):
+        super().__init__(features, labels, params, name='Neural Network')
+        self.model = MLPRegressor()
 
     def preprocess(self):
         """
@@ -47,7 +50,6 @@ class NNPredictor(Predictor):
         prediction = self.model.predict(x_val.values)
         return prediction
 
-
 if __name__ == "__main__":
 
     # Test that the classifier works
@@ -62,25 +64,42 @@ if __name__ == "__main__":
     # random_state=None, tol=0.0001, verbose=False, warm_start=False, momentum=0.9, nesterovs_momentum=True,
     # early_stopping=False, validation_fraction=0.1, beta_1=0.9, beta_2=0.999, epsilon=1e-08
     params = {
-        'hidden_layer_sizes': (1000, 500),
+        'hidden_layer_sizes': (100, 200, 100),
+        'solver': 'sgd',
         'activation': 'logistic', # relu sucks. only god knows why
-        'verbose': True,
+        'verbose': False,
+        'warm_start': True,
         'alpha': 0.001,
-        'learning_rate_init': 0.0001,
-        'max_iter': 15,
+        'learning_rate': 'invscaling',
+        'power_t': 0.1,
+        'learning_rate_init': 0.01,
+        'max_iter': 125,
         'epsilon': 1e-08,
-        'tol': 0.000001
+        'tol': 0.0000001
     }
 
     model = NNPredictor(features, labels, params)
 
+    print("Tuning neural network")
+    params = {
+        'hidden_layer_sizes': [(100, 200, 100)],
+        'solver': ['sgd'],
+        'activation': ['logistic'],
+        'learning_rate': ['invscaling', 'constant'],
+        'learning_rate_init': [0.01],
+        'power_t': [0.1],
+        'tol': [0.0001]
+    }
+    optimal_params = model.tune(params)
+    print('Optimal parameters: ' + str(optimal_params))
+
     # Train the model using the best set of parameters found by the gridsearch
     print("\nTraining NN ...")
-    model.train()
+    model.train(optimal_params)
 
     print("\nEvaluating NN...")
     mae = model.evaluate()
-
+    model.persist_tuning(score=mae, params=optimal_params, write_to='tuning.txt')
     print("\n##########")
     print("Mean Absolute Error is: ", mae)
     print("##########")
