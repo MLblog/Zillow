@@ -80,18 +80,19 @@ if __name__ == "__main__":
 
     model = NNPredictor(features, labels, params)
 
+    # Tune Model
     print("Tuning neural network")
-    params = {
+    tuning_params = {
         'hidden_layer_sizes': [(100, 200, 100)],
-        'solver': ['sgd'],
+        'solver': ['sgd', 'adam'],
         'activation': ['logistic'],
         'learning_rate': ['invscaling', 'constant'],
-        'learning_rate_init': [0.01],
-        'power_t': [0.1],
+        'learning_rate_init': [0.01, 0.001],
+        'power_t': [0.1, 0.5],
         'tol': [0.0001]
     }
-    optimal_params = model.tune(params)
-    print('Optimal parameters: ' + str(optimal_params))
+    optimal_params, optimal_score = model.tune(tuning_params)
+    model.persist_tuning(score=optimal_score, params=optimal_params, write_to='tuning.txt')
 
     # Train the model using the best set of parameters found by the gridsearch
     print("\nTraining NN ...")

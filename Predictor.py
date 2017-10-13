@@ -26,7 +26,6 @@ class Predictor(object):
         self.labels = labels
         self.params = params
         self.name = name
-        self.model = None
 
     def set_params(self, params):
         """Override parameters set in the constructor. Dictionary expected"""
@@ -69,13 +68,13 @@ class Predictor(object):
             f.write("Model\t{}\n".format(self.name))
             f.write("Best MAE\t{}\nparams: {}\n\n".format(score, params))
 
-
-    def tune(self, params, nfolds=3):
+    @timing
+    def tune(self, params, nfolds=3, verbose=1):
         """
         Exhaustively searches over the grid of parameters for the best combination
         :param params: Grid of parameters to be explored
         :param nfolds: Number of folds to be used by cross-validation.
-
+        :param verbose: Verbosity level. 0 is silent, higher int prints more stuff
         :return: Dict of best parameters found.
         """
         self.preprocess()
@@ -83,9 +82,9 @@ class Predictor(object):
         y_train = train['logerror'].values
         x_train = train.drop_unchecked(['logerror','transactiondate'])
 
-        grid = GridSearchCV(self.model, params, cv=nfolds)
+        grid = GridSearchCV(self.model, params, cv=nfolds, n_jobs=8, scoring='neg_mean_absolute_error', verbose=verbose)
         grid.fit(x_train, y_train)
-        return grid.best_params_
+        return grid.best_params_, grid.best_score_
 
     def evaluate(self, metric='mae'):
         _, test = self.split()

@@ -1,7 +1,16 @@
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
+import time
 
+def timing(f):
+    def wrap(*args):
+        start = time.time()
+        ret = f(*args)
+        stop = time.time()
+        print('{} function took {:.1f} s'.format(f.__name__, (stop - start)))
+        return ret
+    return wrap
 
 def drop_unchecked(df, cols):
     """
@@ -44,6 +53,7 @@ def label_encode(df):
             lbl.fit(list(df[c].values))
             df[c] = lbl.transform(list(df[c].values))
     return df
+
 
 def dummy_conversion(df, threshold, categories=[]):
     """
