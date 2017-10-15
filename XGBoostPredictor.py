@@ -12,9 +12,9 @@ pd.DataFrame.drop_unchecked = drop_unchecked
 
 class XGBoostPredictor(Predictor):
 
-    def __init__(self, features, labels, params={}, name=None):
-        model = xgb.XGBRegressor()
-        super().__init__(features, labels, params, name='XGBoost')
+    def __init__(self, features, labels, params={}, name='XGBoost'):
+        self.model = xgb.XGBRegressor()
+        super().__init__(features, labels, params, name=name)
 
 
     def preprocess_test(self):
@@ -40,26 +40,6 @@ class XGBoostPredictor(Predictor):
 
         # Create additional features.
         self.labels = parse_date(self.labels)
-
-    def tune(self, params, nfolds=3):
-        """
-        Exhaustively searches over the grid of parameters for the best combination
-        :param params: Grid of parameters to be explored
-        :return: Dict of best parameters found.
-        """
-        self.preprocess()
-        train, _ = self.split()
-        y_train = train['logerror'].values
-        x_train = train.drop_unchecked(['logerror','transactiondate'])
-
-        self.params['base_score'] = np.median(y_train)
-        model = xgb.XGBRegressor()
-
-        # Use parameter names found in XGBRegressor documentation rather than xgb.train
-        grid = GridSearchCV(model, params, cv=nfolds)
-        grid.fit(x_train, y_train)
-        return grid.best_params_
-
 
     def train(self, params=None, num_boost_rounds=242):
         """
@@ -120,15 +100,20 @@ if __name__ == "__main__":
 
     model = XGBoostPredictor(features, labels, xgb_params)
 
+    # Tune Model
     print("Tuning XGBoost...")
     tuning_params = {
-        'learning_rate': [0.037],
+        'learning_rate': [0.037, 0.05],
         'silent': [1],
-        'max_depth': [5, 6],
-        'subsample': [0.8],
-        'reg_lambda': [0.8]
+        'max_depth': [5, 7],
+        'subsample': [0.8, 1],
+        'reg_lambda': [0.5, 0.8, 1],
+        'n_jobs': [8],
+        'n_estimators': [50, 100, 200],
+        'missing': [-1]
     }
-    optimal_params = model.tune(tuning_params)
+    optimal_params, optimal_score = model.tune(tuning_params)
+    model.persist_tuning(score=optimal_score, params=optimal_params, write_to='tuning.txt')
 
     # Train the model using the best set of parameters found by the gridsearch
     print("\nTraining XGBoost ...")
@@ -136,7 +121,6 @@ if __name__ == "__main__":
 
     print("\nEvaluating model...")
     mae = model.evaluate()
-    model.persist_tuning(score=mae, params=optimal_params, write_to='tuning.txt')
 
     print("\n##########")
     print("Mean Absolute Error is: ", mae)
